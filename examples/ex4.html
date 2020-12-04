@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+<body>
+  <button id="s1">start1</button>
+  <button id="s2">start2</button>
+  <button id="s3">start3</button>
+  <script>
+
+    document.querySelector("#s1").onclick = () => {
+      navigator.mediaDevices.getDisplayMedia({video:true})
+        .then((stream) => console.log(stream))
+        .catch((error) => console.log(error))
+    }
+
+    document.querySelector("#s2").onclick = () => {
+      Promise.resolve().then(() => {
+        navigator.mediaDevices.getDisplayMedia({video:true})
+        .then((stream) => console.log(stream))
+        .catch((error) => console.log(error))
+      })
+    }
+
+    document.querySelector("#s3").onclick = () => {
+      setTimeout(() => {
+        navigator.mediaDevices.getDisplayMedia({video:true})
+        .then((stream) => console.log(stream))
+        .catch((error) => console.log(error))
+      }, 0)
+    }
+
+
+
+
+
+  </script>
+</body>
+</html>
