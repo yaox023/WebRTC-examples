@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <button id="start">start</button>
+
+  <p>audio_from_microphone</p>
+  <audio controls id="audio_from_microphone"></audio>
+  <p>audio_from_screen</p>
+  <audio controls id="audio_from_screen"></audio>
+
+  <script>
+
+    /* 结论
+
+    1. getDisplayMedia 方法上不能单独调 audio
+    get local stream error TypeError: Failed to execute 'getDisplayMedia' on 'MediaDevices': Audio only requests are not supported
+    at getAudioFromScreen (ex2.html:28)
+    at HTMLButtonElement.start.onclick (ex2.html:36)
+
+    2. 可以同时采集到麦克风和屏幕声音
+    
+    */
+    const pc1 = new RTCPeerConnection(null);
+    const pc2 = new RTCPeerConnection(null);
+
+    start.onclick = async () => {
+      try {
+        const stream1 = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream2 = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+        pc1.addTrack(stream1.getTracks().filter(v => v.kind === "audio")[0], stream1);
+        pc1.addTrack(stream2.getTracks().filter(v => v.kind === "audio")[0], stream2);
+
+      } catch (error) {
+        console.log("get local stream error", error);
+      }
+    }
+
+    pc1.onnegotiationneeded = async () => {
+      try {
+        const offer = await pc1.createOffer();
+        console.log("pc1 create offer success");
+
+        await pc1.setLocalDescription(offer);
+        console.log("pc1 setLocalDescription success");
+
+        await pc2.setRemoteDescription(offer);
+        console.log("pc2 setRemoteDescription success");
+
+        const answer = await pc2.createAnswer();
+        console.log("pc2 createAnswer success");
+
+        await pc2.setLocalDescription(answer);
+        console.log("pc2 setLocalDescription success");
+
+        await pc1.setRemoteDescription(answer);
+        console.log("pc1 setRemoteDescription success");
+
+      } catch (error) {
+        console.log("offer answer error", error);
+      }
+    }
+
+    pc1.onicecandidate = async e => {
+      if (!e.candidate) {
+        return;
+      }
+      try {
+        await pc2.addIceCandidate(e.candidate);
+        console.log("pc2 add pc1 candidate success")
+      } catch (error) {
+        console.log("pc2 add pc1 candidate error", error);
+      }
+    }
+
+    pc2.onicecandidate = async e => {
+      if (!e.candidate) {
+        return;
+      }
+      try {
+        await pc1.addIceCandidate(e.candidate);
+        console.log("pc1 add pc2 candidate success")
+      } catch (error) {
+        console.log("pc1 add pc2 candidate error", error);
+      }
+    }
+
+    pc2.ontrack = (e) => {
+      console.log("pc2 ontrack: ", e.streams[0].getTracks())
+      // 暂时不区分哪个是 microphone 哪个是 screen audio
+      if (audio_from_microphone.srcObject === null) {
+        audio_from_microphone.srcObject = e.streams[0];
+      } else {
+        audio_from_screen.srcObject = e.streams[0];
+      }
+    }
+  </script>
+</body>
+
+</html>

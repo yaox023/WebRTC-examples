@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <button id="start">Start</button>
+  <button id="start2">Start2</button>
+  <button id="start3">Start3</button>
+  <video autoplay width="100%"></video>
+  <audio controls></audio>
+
+  <script>
+    /*
+    1. 直接调用 getDisplayMedia 方法
+      Chrome 下会弹出选择屏幕窗口
+      Firefox 下报错：
+        MediaStreamError { name: "InvalidStateError", message: "getDisplayMedia must be called from a user gesture handler.", constraint: "", stack: "" }
+      Safari 下报错：
+        Unhandled Promise Rejection: InvalidAccessError: getDisplayMedia must be called from a user gesture handler.
+    */
+
+    navigator.mediaDevices.getDisplayMedia({ video: true })
+      .then(() => { })
+      .catch((error) => console.log(error))
+
+    /*
+    2. 在按钮的回调函数中调用 getDisplayMedia
+      Chrome 下会弹出选择屏幕窗口，可选择整个屏幕、其他应用、其他网页窗口
+      Firefox 下会弹出选择屏幕窗口，可选择整个屏幕、其他应用
+      Safari 下弹出是否允许对话框，允许后直接分享整个屏幕
+    */
+
+    start.onclick = () => {
+      navigator.mediaDevices.getDisplayMedia({ video: true })
+      .then((stream) => { 
+        console.log(stream)
+        document.querySelector("video").srcObject = stream;
+       })
+      .catch((error) => console.log(error))
+    }
+
+    /*
+    3. getDisplayMedia 中采集电脑声音
+      Chrome 报错 TypeError: Failed to execute 'getDisplayMedia' on 'MediaDevices': Audio only requests are not supported
+      Firefox 正常弹出窗口，选择后采集到的实际上还是屏幕分享流
+      Safari 报错 TypeError: Type error
+    */
+    start2.onclick = () => {
+      navigator.mediaDevices.getDisplayMedia({ audio: true })
+      .then((stream) => { 
+        console.log(stream)
+        document.querySelector("video").srcObject = stream;
+       })
+      .catch((error) => console.log(error))
+    }
+
+    /*
+    4. getDisplayMedia 中同时采集屏幕和电脑声音
+      Chrome 在弹出的选择框中，选择 Chrome 标签页后勾选分享音频可以捕获到电脑音频流
+      Firefox 仅能捕获到视频流
+      Safari 仅能捕获到视频流
+    */
+    start3.onclick = () => {
+      navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+      .then((stream) => { 
+        console.log(stream.getTracks())
+        document.querySelector("audio").srcObject = stream;
+       })
+      .catch((error) => console.log(error))
+    }
+
+    /*
+    5. 浏览器兼容
+    可查看 MDN 数据 https://developer.mozilla.org/en-US/docs/Web/API/Screen_Capture_API
+    */
+
+  </script>
+</body>
+
+</html>

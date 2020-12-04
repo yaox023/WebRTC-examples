@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <button id="start">start</button>
+
+  <p>pc1_local</p>
+  <video autoplay id="pc1_local"></video>
+  <p>pc1_remote</p>
+  <video autoplay id="pc1_remote"></video>
+  <p>pc2_local</p>
+  <video autoplay id="pc2_local"></video>
+  <p>pc2_remote</p>
+  <video autoplay id="pc2_remote"></video>
+
+  <script>
+const pc1 = new RTCPeerConnection(null);
+const pc2 = new RTCPeerConnection(null);
+
+
+start.onclick = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    pc1_local.srcObject = stream;
+    pc2_local.srcObject = stream;
+    const tracks = stream.getVideoTracks();
+    pc1.addTrack(tracks[0], stream);
+    pc2.addTrack(tracks[0], stream);
+  } catch (error) {
+    console.log("get local stream error", error);
+  }
+}
+
+pc1.onnegotiationneeded = async () => {
+  try {
+    const offer = await pc1.createOffer();
+    console.log("pc1 create offer success");
+
+    await pc1.setLocalDescription(offer);
+    console.log("pc1 setLocalDescription success");
+
+    await pc2.setRemoteDescription(offer);
+    console.log("pc2 setRemoteDescription success");
+
+    const answer = await pc2.createAnswer();
+    console.log("pc2 createAnswer success");
+
+    await pc2.setLocalDescription(answer);
+    console.log("pc2 setLocalDescription success");
+
+    await pc1.setRemoteDescription(answer);
+    console.log("pc1 setRemoteDescription success");
+
+  } catch (error) {
+    console.log("offer answer error", error);
+  }
+}
+
+pc1.onicecandidate = async e => {
+  if (!e.candidate) {
+    return;
+  }
+  try {
+    await pc2.addIceCandidate(e.candidate);
+    console.log("pc2 add pc1 candidate success")
+  } catch (error) {
+    console.log("pc2 add pc1 candidate error", error);
+  }
+}
+
+pc2.onicecandidate = async e => {
+  if (!e.candidate) {
+    return;
+  }
+  try {
+    await pc1.addIceCandidate(e.candidate);
+    console.log("pc1 add pc2 candidate success")
+  } catch (error) {
+    console.log("pc1 add pc2 candidate error", error);
+  }
+}
+
+
+pc1.ontrack = (e) => {
+  console.log("pc1 ontrack: ", e.streams[0].getTracks())
+  pc1_remote.srcObject = e.streams[0];
+}
+
+pc2.ontrack = (e) => {
+  console.log("pc2 ontrack: ", e.streams[0])
+  pc2_remote.srcObject = e.streams[0];
+}
+  </script>
+</body>
+
+</html>
