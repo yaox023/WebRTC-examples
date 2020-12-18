@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    video {
+      width: 400px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <button id="publish">发布</button>
+  <button id="subscribe">订阅</button>
+
+  <p>local</p>
+  <video autoplay id="local_video"></video>
+
+  <p>remote</p>
+  <video autoplay controls id="remote_video"></video>
+
+  <div id="log_container"></div>
+  <script>
+    /**
+     * 基本逻辑
+     * 
+     * - 一个发布按钮，点击后采集音视频 add 到 pc
+     * - 一个订阅按钮，点击后向另外一个用户建立 pc 连接，并传输音视频数据
+     * 
+     */
+
+
+    const publishBtn = document.getElementById("publish");
+    const subscribeBtn = document.getElementById("subscribe");
+    const logContainer = document.getElementById("log_container");
+
+    function log(...args) {
+      const div = document.createElement("div");
+      div.style.overflow = "scroll";
+      div.style.maxHeight = "500px";
+      div.style.width = "100%";
+
+      args.push("--------------")
+      args.forEach(arg => {
+        const divItem = document.createElement("div");
+        divItem.innerHTML = JSON.stringify(arg);
+        div.appendChild(divItem);
+      });
+
+      logContainer.appendChild(div);
+    }
+
+
+    const pc = new RTCPeerConnection(null);
+    const socket = new WebSocket("ws://localhost:8888");
+
+    pc.ontrack = (e) => {
+      log("on track", e.streams[0]);
+      console.log(e.streams)
+      // remote_video.srcObject = e.streams[0];
+
+      console.log("peerConnection.ontrack, kind:" + e.track.kind + ",track.id:" + e.track.id);
+
+      var track = e.track;
+      if (!pc.stream) {
+        // pc.streamId = streamId;
+        pc.stream = new MediaStream();
+        pc.stream.addTrack(track);
+
+        // onAddStream(peerConnection);
+      } else {
+        pc.stream.addTrack(track);
+        console.log("track.lenght:" + peerConnection.stream.getTracks().length);
+      }
+
+      // remote_video.srcObject = pc.stream;
+
+      console.log(pc.getReceivers()[0].track)
+
+      const t = pc.getReceivers()[0].track;
+      const m = new MediaStream([t]);
+      remote_video.srcObject = m;
+      
+    }
+
+    pc.onicecandidate = async e => {
+      if (e.candidate) {
+        log("send candidate", e.candidate);
+        socket.send(JSON.stringify({
+          type: "candidate",
+          content: e.candidate
+        }))
+      }
+    }
+
+    publishBtn.onclick = () => {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then(stream => {
+          local_video.srcObject = stream;
+          const tracks = stream.getTracks();
+          log("get local tracks", tracks)
+          tracks.forEach(track => {
+            // 这里注意第二个参数的作用
+            // pc.addTrack(track, stream);
+            pc.addTrack(track);
+
+          })
+        }).catch(error => {
+          console.log("publishBtn onclick error: ", error);
+        });
+    }
+
+    subscribeBtn.onclick = async () => {
+      const offer = await pc.createOffer();
+      log("create local offer", offer.sdp)
+      await pc.setLocalDescription(offer);
+      log("set local offer")
+      log("send offer")
+      socket.send(JSON.stringify({
+        type: "offer",
+        content: offer
+      }));
+    }
+
+    /**
+     * 收到 offer 后的处理
+     */
+    const handleOffer = async offer => {
+      log("get remote offer", offer.sdp)
+      await pc.setRemoteDescription(offer);
+      log("set remote offer");
+      const answer = await pc.createAnswer();
+      log("create local answer", answer.sdp);
+      await pc.setLocalDescription(answer);
+      log("set local answer")
+      log("send answer")
+      socket.send(JSON.stringify({
+        type: "answer",
+        content: answer
+      }));
+    }
+
+    /**
+     * 收到 answer 后的处理
+     */
+    const handleAnswer = async answer => {
+      log("get remote answer", answer.sdp);
+      await pc.setRemoteDescription(answer);
+      log("set remote answer");
+    }
+
+    /**
+     * 收到 candidate 后的处理
+     */
+    const handleCandidate = (candidate) => {
+      log("get candidate", candidate);
+      pc.addIceCandidate(candidate);
+    }
+
+    socket.onopen = function (e) {
+      console.log("socket onopen");
+    };
+
+    socket.onmessage = function (e) {
+      let data;
+      try {
+        data = JSON.parse(e.data);
+      } catch (error) {
+        console.log("json parse error: ", error, e.data);
+        return;
+      }
+      console.log("client got message: ", data);
+
+      switch (data.type) {
+        case "offer":
+          handleOffer(data.content)
+          break;
+        case "answer":
+          handleAnswer(data.content);
+          break;
+        case "candidate":
+          handleCandidate(data.content);
+          break;
+        case "fail":
+          alert("fail, " + data.content);
+          break;
+
+        default:
+          console.log("unknow type", data);
+      }
+    };
+
+    socket.onclose = function (e) {
+      console.log("socket onclose");
+    };
+
+    socket.onerror = function (e) {
+      console.log("socket error", e);
+    };
+  </script>
+</body>
+
+</html>
