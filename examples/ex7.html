@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+
+  <input type="file" name="" id="upload">
+  <a href="" download id="download">Download</a>
+  <script>
+
+    const pc1 = new RTCPeerConnection();
+    const pc2 = new RTCPeerConnection();
+
+    const downloadAnchor = document.getElementById("download");
+    downloadAnchor.style.display = "none";
+    let fileSize;
+    let fileName;
+
+    pc1.onicecandidate = e => {
+      console.log("pc1 get candidiate", e.candidate);
+      if (e.candidate) {
+        pc2.addIceCandidate(e.candidate);
+      }
+    };
+    pc2.onicecandidate = e => {
+      console.log("pc2 get candidiate", e.candidate);
+      if (e.candidate) {
+        pc1.addIceCandidate(e.candidate);
+      }
+    };
+
+    const options = { ordered: true, maxRetransmits: 30 };
+    const sendChannel = pc1.createDataChannel('sendDataChannel', options);
+    sendChannel.onerror = (error) => {
+      console.log("sendChannel onerror", error);
+    };
+    sendChannel.onopen = () => {
+      console.log("sendChannel onopen");
+    };
+    sendChannel.onclose = () => {
+      console.log("sendChannel onclose");
+    };
+    sendChannel.onmessage = (event) => {
+    };
+
+    let receiveChannel;
+    pc2.ondatachannel = (event) => {
+      receiveChannel = event.channel;
+      var receiveBuffer = []; //存放数据的数组
+      var receivedSize = 0; //数据大小
+      receiveChannel.onmessage = (event) => {
+        //每次事件被触发时，说明有数据来了，将收到的数据放到数组中
+        receiveBuffer.push(event.data);
+        //更新已经收到的数据的长度
+        receivedSize += event.data.byteLength;
+
+        //如果接收到的字节数与文件大小相同，则创建文件
+        if (receivedSize === fileSize) { //fileSize 是通过信令传过来的
+          //创建文件
+          var received = new Blob(receiveBuffer, { type: 'application/octet-stream' });
+          //将buffer和 size 清空，为下一次传文件做准备
+          receiveBuffer = [];
+          receiveSize = 0;
+
+          //生成下载地址
+          downloadAnchor.href = URL.createObjectURL(received);
+          downloadAnchor.download = fileName;
+          downloadAnchor.textContent =
+            `Click to download '${fileName}' (${fileSize} bytes)`;
+          downloadAnchor.style.display = 'block';
+        }
+      };
+    }
+
+    const mediaNegotiate = async () => {
+      try {
+        const offer = await pc1.createOffer();
+        console.log("pc1 create offer success");
+
+        await pc1.setLocalDescription(offer);
+        console.log("pc1 setLocalDescription success");
+
+        await pc2.setRemoteDescription(offer);
+        console.log("pc2 setRemoteDescription success");
+
+        const answer = await pc2.createAnswer();
+        console.log("pc2 createAnswer success");
+
+        await pc2.setLocalDescription(answer);
+        console.log("pc2 setLocalDescription success");
+
+        await pc1.setRemoteDescription(answer);
+        console.log("pc1 setRemoteDescription success");
+
+      } catch (error) {
+        console.log("offer answer error", error);
+      }
+    }
+    mediaNegotiate();
+
+    document.getElementById("upload").onchange = (e) => {
+      var offset = 0; //偏移量
+      var chunkSize = 16384; //每次传输的块大小
+      var file = e.target.files[0]; //要传输的文件，它是通过HTML中的file获取的
+      console.log(file)
+      fileSize = file.size;
+      fileName = file.name;
+
+      //创建fileReader来读取文件
+      fileReader = new FileReader();
+
+      fileReader.onload = e => { //当数据被加载时触发该事件
+
+        sendChannel.send(e.target.result); //发送数据
+        offset += e.target.result.byteLength; //更改已读数据的偏移量
+
+        if (offset < file.size) { //如果文件没有被读完
+          readSlice(offset); // 读取数据
+        }
+      }
+
+      var readSlice = o => {
+        const slice = file.slice(offset, o + chunkSize); //计算数据位置
+        fileReader.readAsArrayBuffer(slice); //读取 16K 数据
+      };
+
+      readSlice(0); //开始读取数据
+
+    }
+
+  </script>
+</body>
+
+</html>
